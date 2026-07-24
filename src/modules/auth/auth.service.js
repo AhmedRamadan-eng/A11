@@ -3,8 +3,9 @@ import { ConflictException, NotFoundException,UnauthorizedException } from "../.
 import { ProviderEnums } from "../../common/enums/enms.service.js";
 import { findById, findOne } from "../../models/database.service.js";
 import { hash,compare } from "bcrypt";
-import { env } from "../../../config/env.service.js";
+import { env } from "../../../config/index.js"
 import jwt from "jsonwebtoken"
+import { decodedRefreshToken, generateToken } from "../../common/security/security.js";
 export const signup = async (data) => {
   const { userName, email, password, phone, provider, gender} = data;
 
@@ -28,37 +29,75 @@ export const login = async (data) => {
   const { email, password } = data;
 
   const existuser = await findOne({
-  model: UserModel,
-  filter: {
-    email,   
-    provider: ProviderEnums.System
-  }
-});
+    model: UserModel,
+    filter: {
+      email,
+      provider: ProviderEnums.System
+    }
+  });
 
-  if (existuser) {
-    
-    
-    const ismatched=await compare(password,existuser.password)
-    let token= jwt.sign({id :existuser},"route",{expiresIn:"1d"})
+if (existuser) {
 
-     
-    return {existuser,token}
-    
-  }
+  let {accesstoken,refreshtoken}= generateToken(existuser)
 
-  return NotFoundException({ message: "user not found"});
+  const ismatched = await compare(password, existuser.password);
+
+  if (ismatched) {
+    
+    return { existuser,accesstoken,refreshtoken }; 
+  }}
+
+  return NotFoundException({ message: "user not found" });
 };
 
-export const getUserById = async (headers) => {
-  let { authorization } = headers;
-if(!authorization){
-  UnauthorizedException("unauthoriza")
-}
-  let decoded = jwt.verify(authorization, "route");
 
-  console.log(decoded.id);
 
-  let userData = await findById({ model: UserModel, id: decoded.id });
+export const getUserById = async (userId) => {
+  
+    
 
-  return userData;
-};  
+    let userData = await findById({
+      model: UserModel,
+      id: userId
+    });
+
+    return userData;
+
+  
+  
+};
+
+
+export const generateAccessToken = async (token) => {
+
+  let decoded = jwt.decode(token);
+
+  if (!decoded) {
+    throw new Error("Invalid token");
+  }
+
+  let decodedData = decodedRefreshToken(token, decoded);
+
+  let signature;
+
+  switch (decodedData.aud) {
+
+    case "Admin":
+      signature = env.Adminsignature;
+      break;
+
+    case "user":
+    default:
+      signature = env.usersignature;
+      break;
+  }
+
+  return jwt.sign(
+    { id: decodedData.id },
+    signature,
+    {
+      expiresIn: "30m",
+      audience: decodedData.aud
+    }
+  );
+};

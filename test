@@ -1,0 +1,92 @@
+export const login = async (data) => {
+  const { email, password } = data;
+
+  const existuser = await findOne({
+    model: UserModel,
+    filter: {
+      email,   
+      provider: ProviderEnums.System
+    }
+  });
+
+  if (existuser) {
+    let signature=undefined
+    let audience=undefined
+
+    switch (existuser.role) {
+      case "0":
+        signature=env.usersignature
+        audience="user"
+        break;
+    
+      default:
+        signature=env.Adminsignature
+        audience="Admin"
+        break;
+    }
+// let token = jwt.sign(
+//   { id: existuser._id },
+//   process.env.jwt_key,
+//   {
+//     expiresIn: "1d",
+//     audience
+//   }
+// )
+
+
+
+let token = jwt.sign(
+  { id: existuser._id },
+  signature, // ✅ بدل jwt_key
+  {
+    expiresIn: "1d",
+    audience
+  }
+)
+    return {existuser,token}
+  }
+
+  console.log("SIGNATURE LOGIN:", signature);
+  return NotFoundException({ message: "user not found"});
+};
+export const getUserById = async (headers) => {
+  let { authorization } = headers;
+
+  if (!authorization) {
+    throw new Error("unauthoriza");
+  }
+
+  // التوكن
+let token = authorization.split(" ")[1];
+
+console.log("TOKEN:", token);
+
+let decoded = jwt.decode(token);
+
+console.log("DECODED:", decoded);
+
+if (!decoded) {
+  throw new Error("invalid token");
+}
+  let signature = undefined;
+switch (decoded.aud) {
+  case "Admin":
+    signature = env.Adminsignature;
+    break;
+
+  default:
+    signature = env.usersignature;
+    break;
+}
+
+  let decodedData = jwt.verify(token, signature);
+
+  console.log(decodedData.id);
+
+  let userData = await findById({
+    model: UserModel,
+    id: decodedData.id
+  });
+console.log("SIGNATURE VERIFY:", signature);
+  return userData;
+};

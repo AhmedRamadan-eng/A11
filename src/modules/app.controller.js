@@ -10,7 +10,7 @@ export const bootstrap = async () => {
 
   await databaseconnection();
 
-  
+  app.use("/upload",express.static("upload"))
   app.use("/auth",  authRouter);
 
   
